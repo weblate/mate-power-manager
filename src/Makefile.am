@@ -8,7 +8,12 @@ EXTRA_DIST =						\
 	org.mate.PowerManager.Backlight.xml		\
 	org.mate.PowerManager.KbdBacklight.xml		\
 	gpm-marshal.list				\
+	wlr-output-power-management-unstable-v1.xml	\
 	$(NULL)
+
+WAYLAND_PROTOCOLS_DATADIR = @WAYLAND_PROTOCOLS_DATADIR@
+EXT_IDLE_NOTIFY_XML = $(WAYLAND_PROTOCOLS_DATADIR)/staging/ext-idle-notify/ext-idle-notify-v1.xml
+WLR_OUTPUT_POWER_XML = $(srcdir)/wlr-output-power-management-unstable-v1.xml
 
 AM_CPPFLAGS =						\
 	$(GLIB_CFLAGS)					\
@@ -21,15 +26,16 @@ AM_CPPFLAGS =						\
 	$(LIBNOTIFY_CFLAGS)				\
 	$(CANBERRA_CFLAGS)				\
 	$(GSTREAMER_CFLAGS)				\
+	$(APPLICATION_INDICATOR_CFLAGS)			\
 	-DI_KNOW_THE_DEVICEKIT_POWER_API_IS_SUBJECT_TO_CHANGE \
 	$(UPOWER_CFLAGS)				\
 	-DBINDIR=\"$(bindir)\"			 	\
 	-DSBINDIR=\"$(sbindir)\"			\
 	-DMATELOCALEDIR=\""$(datadir)/locale"\"		\
 	-DDATADIR=\"$(datadir)\"			\
-	-DPREFIX=\""$(prefix)"\" 			\
-	-DSYSCONFDIR=\""$(sysconfdir)"\" 		\
-	-DLIBDIR=\""$(libdir)"\" 			\
+	-DPREFIX=\""$(prefix)\"" 			\
+	-DSYSCONFDIR=\""$(sysconfdir)\"" 		\
+	-DLIBDIR=\""$(libdir)\"" 			\
 	-DVERSION="\"$(VERSION)\"" 			\
 	-DGPM_ICONS_DATA=\"$(pkgdatadir)/icons\"	\
 	-DGTKBUILDERDIR=\"$(pkgdatadir)\"		\
@@ -37,6 +43,13 @@ AM_CPPFLAGS =						\
 	-DG_LOG_DOMAIN=\"PowerManager\"			\
 	-I$(top_srcdir)					\
 	$(DISABLE_DEPRECATED)
+
+if HAVE_WAYLAND
+AM_CPPFLAGS +=					\
+	$(WAYLAND_CLIENT_CFLAGS)			\
+	-DHAVE_WAYLAND					\
+	$(NULL)
+endif
 
 AM_CPPFLAGS += $(NULL)
 
@@ -77,6 +90,13 @@ libgpmshared_a_SOURCES =				\
 	gpm-marshal.c					\
 	gpm-upower.c					\
 	gpm-upower.h
+
+if HAVE_WAYLAND
+nodist_libgpmshared_a_SOURCES =				\
+	ext-idle-notify-v1-protocol.c			\
+	wlr-output-power-management-unstable-v1-protocol.c	\
+	$(NULL)
+endif
 
 mate_power_backlight_helper_SOURCES =			\
 	gpm-backlight-helper.c				\
@@ -208,7 +228,14 @@ mate_power_manager_LDADD =				\
 	$(LIBNOTIFY_LIBS)				\
 	$(GPM_EXTRA_LIBS)				\
 	$(UPOWER_LIBS)					\
+	$(APPLICATION_INDICATOR_LIBS)			\
 	-lm
+
+if HAVE_WAYLAND
+mate_power_manager_LDADD +=				\
+	$(WAYLAND_CLIENT_LIBS)				\
+	$(NULL)
+endif
 
 mate_power_manager_CFLAGS =				\
 	$(WARN_CFLAGS)					\
@@ -289,6 +316,27 @@ BUILT_SOURCES = 					\
 	gpm-marshal.h					\
 	$(NULL)
 
+if HAVE_WAYLAND
+BUILT_SOURCES +=					\
+	ext-idle-notify-v1-client.h			\
+	ext-idle-notify-v1-protocol.c			\
+	wlr-output-power-management-unstable-v1-client.h	\
+	wlr-output-power-management-unstable-v1-protocol.c	\
+	$(NULL)
+endif
+
+ext-idle-notify-v1-client.h: $(EXT_IDLE_NOTIFY_XML)
+	$(AM_V_GEN)$(WAYLAND_SCANNER) client-header < $< > $@
+
+ext-idle-notify-v1-protocol.c: $(EXT_IDLE_NOTIFY_XML)
+	$(AM_V_GEN)$(WAYLAND_SCANNER) private-code < $< > $@
+
+wlr-output-power-management-unstable-v1-client.h: $(WLR_OUTPUT_POWER_XML)
+	$(AM_V_GEN)$(WAYLAND_SCANNER) client-header < $< > $@
+
+wlr-output-power-management-unstable-v1-protocol.c: $(WLR_OUTPUT_POWER_XML)
+	$(AM_V_GEN)$(WAYLAND_SCANNER) private-code < $< > $@
+
 gpm-marshal.c: gpm-marshal.list
 	echo "#include \"gpm-marshal.h\"" > $@ && \
 	@GLIB_GENMARSHAL@ $< --prefix=gpm_marshal --body >> $@
@@ -320,6 +368,8 @@ org.mate.PowerManager.KbdBacklight.h: org.mate.PowerManager.KbdBacklight.xml
 clean-local:
 	rm -f *~
 	rm -f gpm-marshal.c gpm-marshal.h
+	rm -f ext-idle-notify-v1-client.h ext-idle-notify-v1-protocol.c
+	rm -f wlr-output-power-management-unstable-v1-client.h wlr-output-power-management-unstable-v1-protocol.c
 
 CLEANFILES = \
 	$(BUILT_SOURCES)				\

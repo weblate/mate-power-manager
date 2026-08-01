@@ -33,6 +33,45 @@ cflags = [
   '-DI_KNOW_THE_DEVICEKIT_POWER_API_IS_SUBJECT_TO_CHANGE',
   '-DEGG_CONSOLE="GPM_CONSOLE"'
 ]
+
+if enable_wayland
+  cflags += '-DHAVE_WAYLAND'
+  wp_dep = dependency('wayland-protocols')
+  wp_datadir = wp_dep.get_pkgconfig_variable('pkgdatadir')
+  ext_idle_notify_xml = join_paths(wp_datadir, 'staging', 'ext-idle-notify', 'ext-idle-notify-v1.xml')
+  ext_idle_notify_code = custom_target('ext-idle-notify-protocol',
+    input: ext_idle_notify_xml,
+    output: 'ext-idle-notify-v1-protocol.c',
+    command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@']
+  )
+  ext_idle_notify_header = custom_target('ext-idle-notify-header',
+    input: ext_idle_notify_xml,
+    output: 'ext-idle-notify-v1-client.h',
+    command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@']
+  )
+
+  wlr_power_xml = files('wlr-output-power-management-unstable-v1.xml')
+  wlr_output_power_code = custom_target('wlr-output-power-protocol',
+    input: wlr_power_xml,
+    output: 'wlr-output-power-management-unstable-v1-protocol.c',
+    command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@']
+  )
+  wlr_output_power_header = custom_target('wlr-output-power-header',
+    input: wlr_power_xml,
+    output: 'wlr-output-power-management-unstable-v1-client.h',
+    command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@']
+  )
+
+  wayland_protocol_sources = [
+    ext_idle_notify_code,
+    ext_idle_notify_header,
+    wlr_output_power_code,
+    wlr_output_power_header,
+  ]
+  sources += wayland_protocol_sources
+else
+  wayland_protocol_sources = []
+endif
 marshal_files = gnome.genmarshal('gpm-marshal', prefix : 'gpm_marshal', sources : 'gpm-marshal.list')
 
 dbus_binding_tool = find_program('dbus-binding-tool')
@@ -63,7 +102,12 @@ deps = [
   keyring,
   libsecret,
   notify,
+  appindicator,
 ]
+
+if enable_wayland
+  deps += wayland_client
+endif
 
 libmpm_shared = static_library(
   'libmpmstatic',
@@ -175,6 +219,7 @@ executable(
     dbus_Backlight,
     dbus_KbdBacklight,
     dbus_Manager,
+    wayland_protocol_sources,
   ],
   include_directories : [
     include_directories('..'),
